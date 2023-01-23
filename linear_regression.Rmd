@@ -1,0 +1,131 @@
+---
+title: "linear_regression"
+author: "Алиса Селезнева"
+date: "2023-01-20"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(mvtnorm)
+library(glmnet)
+library(ggpubr)
+```
+
+
+## Задание 1 (a)
+
+
+```{r}
+mean_k <- 88.5
+sigma_k <- 13.25
+mean_m <- 5.4
+sigma_m <- 1.45
+rho <- 0.6
+```
+
+
+Создам ковариационную матрицу для значений креатинина и мочевины. 
+
+```{r}
+sigma_cov <- matrix(c(sigma_k^2, rho*sigma_k*sigma_m, rho*sigma_k*sigma_m, sigma_m^2), 2, 2)
+set.seed(125)
+S <- as.data.frame(rmvnorm(n = 100, mean = c(mean_k, mean_m), sigma = sigma_cov))
+colnames(S) <- c("k", "m")
+plot(S)
+```
+
+
+Построим модель линейной регрессии, подчиняющейся функции Y = aX + b + e 
+
+
+```{r}
+model <- lm(k ~ m, S)
+summary(model)
+```
+Построим график получившейся прямой y = 65 + 4.7*x.
+```{r message=FALSE}
+ggplot(S, aes (m, k)) +
+  geom_point(shape = 21, fill = "lightgray") +
+  geom_smooth(method='lm') +
+  stat_regline_equation() +
+  theme_light()
+```
+
+
+Теперь вычислим коэффициенты a и b по формулам и выясним, как полученные оценки связаны  со средний, дисперсией и корреляцией выборки S.
+
+
+```{r}
+a <- cor(S$k, S$m)*sd(S$k)/sd(S$m)
+b <- mean(S$k) - a*mean(S$m)
+pred_coef_model <- as.data.frame(matrix(c(a, b), ncol = 2))
+colnames(pred_coef_model) <- c("a", "b")
+pred_coef_model
+```
+
+У меня получились коэффициенты a и b равные  4.65 и 64.54, что практически равно полученным коэффициента.
+
+
+## Задание 1 (b)
+
+Проверю, как распределены остатки, используя критерий Шапиро-Уилка.
+H0: остатки имеют нормальное распределение.
+H1: распределение остатков отлично от нормального.
+
+```{r}
+resid <- resid(model)
+shapiro.test(resid)
+```
+
+W-значение сильно больше порогового значения p-value, следовательно, мы не не можем отвергнуть нулевую гипотезу и будем считать, что распределение остатков нормально.
+
+
+## Задание 1(с)
+
+Создадим выборку W имеющую распределение Пуассона, размером 100 и лямбдой 4.
+
+```{r}
+set.seed(100)
+W <- rpois(100, 4)
+S <- S %>%
+  mutate(w = W)
+model_w <- lm(k ~ m + w, S)
+summary(model_w)
+```
+
+Мы видим, что параметры R и adjusted R значительно не изменились (0.2565 и 0.2489, против 0.2565 и 0.2412) 
+
+## Задание 2
+
+
+## Задание 3
+
+```{r}
+set.seed(205)
+Ly <- rnorm(201, 20, 5)
+Neu <- rnorm(201, 80, 5)
+NLR <- Neu / Ly
+prob_sep <- ifelse(NLR < 3, 0,
+                   ifelse(NLR > 9, 1, (NLR-3)/6))
+sep <- rbinom(201, 1, prob_sep)
+```
+
+```{r}
+g_lm <- glm(sep ~ Neu + Ly, family = "binomial")
+summary(g_lm)
+```
+Посчитаем вероятность по формуле из задания.
+```{r}
+Neu_1 <- 90
+Ly_1 <- 15
+prob_sep_1 <- (Neu_1/Ly_1 - 3)/6
+prob_sep_1
+```
+Вероятность 50 %.
+
+Воспользуемся функцией predict, чтобы предсказать вероятность равенства случайной величины единице при Neu = 90, а Ly = 15.
+```{r}
+predict(g_lm, data.frame( Neu = 90, Ly = 15))
+```
+Она близка к единице.
